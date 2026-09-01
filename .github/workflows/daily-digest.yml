@@ -1,0 +1,40 @@
+name: Daily Power & EV News Digest
+
+on:
+  schedule:
+    # GitHub uses UTC. 06:00 UTC = 08:00 Berlin (summer) / 07:00 (winter).
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}   # adds a manual "Run workflow" button
+
+permissions:
+  contents: write         # commit digest + dedupe memory back to the repo
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate today's digest
+        run: python agent.py
+
+      - name: Save digest + 7-day dedupe memory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add digests data
+          git commit -m "digest: $(date -u +%F)" || echo "nothing new to commit"
+          git push
+
+      - name: Send digest to your Gmail inbox
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          DIGEST_TO: ${{ secrets.DIGEST_TO }}
+        run: python send_email.py
